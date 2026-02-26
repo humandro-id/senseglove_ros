@@ -6,9 +6,9 @@
 gloves:
   - type: nova2
     side: left
-    serial: "01001"
+    serial: "00801"
     finger_distance: false
   - type: nova2
     side: right
-    serial: "01002"
+    serial: "00804"
     finger_distance: false
