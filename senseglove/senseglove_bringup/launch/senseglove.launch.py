@@ -51,11 +51,13 @@ def generate_launch_description():
     def launch_hardware_nodes(context, *args, **kwargs):
         input(f"{_YELLOW}Start SenseCom. Confirm all gloves connected, then press ENTER...{_RESET}")
 
-        hardware_nodes = []
+        nodes = []
         for glove in gloves:
             robot = glove.get('type', 'nova2') + '_' + glove.get('side', 'left')
             is_right = 'true' if glove.get('side') == 'right' else 'false'
             glove_serial = str(glove.get('serial', ''))
+            handedness = 'rh' if glove.get('side') == 'right' else 'lh'
+            ns = f'/senseglove/glove{glove_serial}/{handedness}'
 
             launch_args = {
                 'robot': robot,
@@ -63,14 +65,30 @@ def generate_launch_description():
                 'gloveSerial': glove_serial
             }
 
-            hardware_nodes.append(
+            nodes.append(
                 IncludeLaunchDescription(
                     PythonLaunchDescriptionSource(hardware_launch),
                     launch_arguments=launch_args.items()
                 )
             )
 
-        return hardware_nodes
+            nodes.append(
+                Node(
+                    package='senseglove_interaction',
+                    executable='haptics_node',
+                    name=f'haptics_node_{handedness}',
+                    namespace=ns,
+                    parameters=[{
+                        'controller_node': f'{ns}/haptics_controller',
+                        'publish_topic': f'{ns}/haptics_controller/joint_trajectory',
+                        'subscribe_topic': f'{ns}/haptics_commands',
+                        'publish_rate': 60,
+                    }],
+                    output='screen',
+                )
+            )
+
+        return nodes
 
     # Hardware Nodes Event handlers
     launch_hardware_nodes_with_sensecom = RegisterEventHandler(
