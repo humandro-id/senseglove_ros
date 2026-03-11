@@ -42,19 +42,34 @@ class HapticsNode(Node):
         self.get_logger().info("Joints:\n  " + "\n  ".join(self.joint_names))
 
     def _fetch_joint_list(self):
-        client = ParameterClient(self, self.controller_node)
-        if not client.wait_for_services(timeout_sec=5.0):
-            self.get_logger().error(f"Could not reach {self.controller_node} for joints param")
-            return ['dummy']
+        self.get_logger().info(f"Buscando el servidor de parámetros de {self.controller_node}...")
+        
+        temp_node = rclpy.create_node('temp_param_client_node')
+        client = ParameterClient(temp_node, self.controller_node)
 
+        while not client.wait_for_services(timeout_sec=2.0):
+            self.get_logger().info(f"Esperando a que el controlador {self.controller_node} inicie...")
+            if not rclpy.ok():
+                temp_node.destroy_node()
+                return ['dummy']
+
+        self.get_logger().info("¡Servicio encontrado! Solicitando parámetros...")
+      
         future = client.get_parameters(['joints'])
-        rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+        
+        rclpy.spin_until_future_complete(temp_node, future)
+        
         result = future.result()
-        if result and result.values and result.values[0].string_array_value:
-            return list(result.values[0].string_array_value)
-        else:
-            self.get_logger().warn(f"Controller {self.controller_node} has no 'joints' parameter")
-            return ['dummy']
+        temp_node.destroy_node() 
+
+        if result and result.values:
+            joints = list(result.values[0].string_array_value)
+            if joints:
+                self.get_logger().info("¡Joints obtenidos con éxito!")
+                return joints
+
+        self.get_logger().warn(f"El controlador {self.controller_node} no tiene el parámetro 'joints' o está vacío.")
+        return ['dummy']
 
     def _callback(self, msg: Float64MultiArray):
         if len(msg.data) != len(self.joint_names):
