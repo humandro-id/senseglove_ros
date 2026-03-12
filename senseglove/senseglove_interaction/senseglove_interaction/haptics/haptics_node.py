@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.parameter_client import AsyncParameterClient as ParameterClient
 from rclpy.duration import Duration as RclDuration
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, qos_profile_sensor_data
 
 from std_msgs.msg import Header, Float64MultiArray
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -30,9 +31,18 @@ class HapticsNode(Node):
 
         self.joint_names = self._fetch_joint_list()
 
-        self.pub = self.create_publisher(JointTrajectory, self.publish_topic, 10)
+        pub_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+        )
+
+        sub_qos = qos_profile_sensor_data
+        sub_qos.depth = 1
+
+        self.pub = self.create_publisher(JointTrajectory, self.publish_topic, pub_qos)
         self.sub = self.create_subscription(
-            Float64MultiArray, subscribe_topic, self._callback, 10)
+            Float64MultiArray, subscribe_topic, self._callback, sub_qos)
 
         period = 1.0 / self.publish_rate
         self.timer = self.create_timer(period, self._on_timer)
