@@ -88,6 +88,18 @@ def generate_launch_description():
                 )
             )
 
+            nodes.append(
+                Node(
+                    package='senseglove_interaction',
+                    executable='nova2_vibration_node',
+                    name=f'nova2_vibration_node',
+                    namespace=ns,
+                    output='screen',
+                )
+            )
+
+            
+
         return nodes
 
     # Hardware Nodes Event handlers

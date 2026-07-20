@@ -2,7 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
-from rclpy.parameter_client import AsyncParameterClient as ParameterClient
+from rclpy.parameter_service import AsyncParameterClient as ParameterClient
 from rclpy.duration import Duration as RclDuration
 
 from std_msgs.msg import Header, Float64MultiArray
