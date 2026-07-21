@@ -15,76 +15,68 @@ class HapticsNode(Node):
         super().__init__('senseglove_haptics_node')
         self.get_logger().info('Initializing haptics node...')
 
-        self.declare_parameter('controller_node', '/senseglove/glove0/lh/haptics_controller')
-        self.declare_parameter('publish_topic', '/senseglove/glove0/lh/haptics_controller/joint_trajectory')
-        self.declare_parameter('subscribe_topic', 'haptics_commands')
+        # Parameters
+        self.declare_parameter('glove_serial', '03008')
+        self.declare_parameter('side', 'rh')
+
+        serial = self.get_parameter('glove_serial').value
+        side = self.get_parameter('side').value
+
+        topic = f'/senseglove/glove{serial}/{side}/vibration_waveform'
+
+        self.declare_parameter(
+            'controller_node', f'/senseglove/glove{serial}/{side}/haptics_controller')
+        self.declare_parameter(
+            'publish_topic', f'/senseglove/glove{serial}/{side}/haptics_controller/joint_trajectory')
         self.declare_parameter('publish_rate', 60)
-        self.declare_parameter('default_efforts', [0.0, 0.0, 0.0, 0.0,
-                                                   0.0, 0.0,
-                                                   0.0, 0.0, 0.0])
+        self.declare_parameter('hold_time', 2.0)
+        self.declare_parameter('default_efforts', [
+                               20.0, 20.0, 20.0, 20.0, 20.0])
 
         self.controller_node = self.get_parameter('controller_node').value
         self.publish_topic = self.get_parameter('publish_topic').value
         subscribe_topic = self.get_parameter('subscribe_topic').value
         self.publish_rate = int(self.get_parameter('publish_rate').value)
-        self.current_efforts = list(self.get_parameter('default_efforts').value)
+        self.current_efforts = list(
+            self.get_parameter('default_efforts').value)
 
         self.joint_names = self._fetch_joint_list()
 
-        pub_qos = QoSProfile(
-            depth=1,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            history=HistoryPolicy.KEEP_LAST,
-        )
-
-        sub_qos = qos_profile_sensor_data
-        sub_qos.depth = 1
-
-        self.pub = self.create_publisher(JointTrajectory, self.publish_topic, pub_qos)
-        self.sub = self.create_subscription(
-            Float64MultiArray, subscribe_topic, self._callback, sub_qos)
-
+        # Publisher and Subscriber
+        self.pub = self.create_publisher(
+            JointTrajectory, self.publish_topic, 10)
+        self.sub = self.create_subscription(Float64MultiArray,
+                                            '/haptics_commands', self._callback, 10)
+        # Timer
         period = 1.0 / self.publish_rate
         self.timer = self.create_timer(period, self._on_timer)
 
         self.get_logger().info(f"Publishing to {self.publish_topic}")
         self.get_logger().info(f"Subscribed to {subscribe_topic}")
         self.get_logger().info("Joints:\n  " + "\n  ".join(self.joint_names))
+        self.get_logger().info(f"Playing default efforts")
 
     def _fetch_joint_list(self):
-        self.get_logger().info(f"Buscando el servidor de parámetros de {self.controller_node}...")
-        
-        temp_node = rclpy.create_node('temp_param_client_node')
-        client = ParameterClient(temp_node, self.controller_node)
+        client = ParameterClient(self, self.controller_node)
+        if not client.wait_for_services(timeout_sec=2.0):
+            self.get_logger().error(
+                f"Could not reach {self.controller_node} for joints param")
+            return ['dummy']
 
-        while not client.wait_for_services(timeout_sec=2.0):
-            self.get_logger().info(f"Esperando a que el controlador {self.controller_node} inicie...")
-            if not rclpy.ok():
-                temp_node.destroy_node()
-                return ['dummy']
-
-        self.get_logger().info("¡Servicio encontrado! Solicitando parámetros...")
-      
         future = client.get_parameters(['joints'])
-        
-        rclpy.spin_until_future_complete(temp_node, future)
-        
+        rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
         result = future.result()
-        temp_node.destroy_node() 
-
-        if result and result.values:
-            joints = list(result.values[0].string_array_value)
-            if joints:
-                self.get_logger().info("¡Joints obtenidos con éxito!")
-                return joints
-
-        self.get_logger().warn(f"El controlador {self.controller_node} no tiene el parámetro 'joints' o está vacío.")
-        return ['dummy']
+        if result and result.values and result.values[0].string_array_value:
+            return list(result.values[0].string_array_value)
+        else:
+            self.get_logger().warn(
+                f"Controller {self.controller_node} has no 'joints' parameter")
+            return ['dummy']
 
     def _callback(self, msg: Float64MultiArray):
         if len(msg.data) != len(self.joint_names):
             self.get_logger().warn(
-                f"Expected {len(self.joint_names)} values, got {len(msg.data)}")
+                f"Expected {len(self.joint_names)} effort values, got {len(msg.data)}")
             return
         self.current_efforts = list(msg.data)
 
@@ -98,8 +90,9 @@ class HapticsNode(Node):
         traj.joint_names = self.joint_names
 
         point = JointTrajectoryPoint()
-        # PID gains (P=1.0) convert positions directly to effort commands
-        point.positions = [float(x) for x in efforts]
+        point.positions = [0.0] * len(self.joint_names)
+        point.effort = [float(x) for x in efforts]
+        # “At (now + 50ms), Effort is applied”
         point.time_from_start = RclDuration(seconds=0.05).to_msg()
         traj.points.append(point)
 
