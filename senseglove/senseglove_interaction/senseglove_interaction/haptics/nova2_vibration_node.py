@@ -31,7 +31,7 @@ class Nova2VibrationNode(Node):
     def __init__(self, node_name='nova2_vibration_node'):
         super().__init__(node_name)
 
-        self.declare_parameter('glove_serial', '03008')
+        self.declare_parameter('glove_serial', '00804')
         self.declare_parameter('side', 'rh')
 
         serial = self.get_parameter('glove_serial').value

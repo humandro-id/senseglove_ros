@@ -87,6 +87,15 @@ def generate_launch_description():
                     output='screen',
                 )
             )
+            nodes.append(
+                Node(
+                    package='senseglove_interaction',
+                    executable='nova2_vibration_node',
+                    name='nova2_vibration_node',
+                    namespace=ns,
+                    output='screen',
+                )
+            )
 
         return nodes
 
