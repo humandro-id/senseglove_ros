@@ -10,6 +10,8 @@ from rcl_interfaces.srv import GetParameters
 
 from std_msgs.msg import Header, Float64MultiArray
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, qos_profile_sensor_data
+
 
 
 class HapticsNode(Node):
@@ -35,11 +37,20 @@ class HapticsNode(Node):
         # Obtener la lista de articulaciones del controlador
         self.joint_names = self._fetch_joint_list()
 
+        pub_qos = qos_profile_sensor_data
+        pub_qos.depth = 1
+
+        sub_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+        )
+
         # Publisher y Subscriber configurados con los tópicos recibidos del launch
         self.pub = self.create_publisher(
-            JointTrajectory, self.publish_topic, 10)
+            JointTrajectory, self.publish_topic, pub_qos)
         self.sub = self.create_subscription(
-            Float64MultiArray, subscribe_topic, self._callback, 10)
+            Float64MultiArray, subscribe_topic, self._callback, sub_qos)
 
         # Timer para enviar comandos periódicamente
         period = 1.0 / self.publish_rate
