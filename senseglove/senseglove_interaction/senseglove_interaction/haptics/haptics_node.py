@@ -25,7 +25,7 @@ class HapticsNode(Node):
 
         # 2. Declarar parámetros opcionales/adicionales
         self.declare_parameter('hold_time', 2.0)
-        self.declare_parameter('default_efforts', [20.0, 20.0, 20.0, 20.0, 20.0])
+        self.declare_parameter('default_efforts', [1.0, 1.0, 1.0, 1.0, 1.0]) # 20.0
 
         # 3. Leer los parámetros inyectados por launch.py
         self.controller_node = self.get_parameter('controller_node').value
