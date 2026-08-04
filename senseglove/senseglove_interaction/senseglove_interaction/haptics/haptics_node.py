@@ -32,10 +32,11 @@ class HapticsNode(Node):
         self.publish_topic = self.get_parameter('publish_topic').value
         subscribe_topic = self.get_parameter('subscribe_topic').value
         self.publish_rate = int(self.get_parameter('publish_rate').value)
-        self.current_efforts = list(self.get_parameter('default_efforts').value)
 
         # Obtener la lista de articulaciones del controlador
         self.joint_names = self._fetch_joint_list()
+        self.current_efforts = self._map_efforts_to_joints(
+            list(self.get_parameter('default_efforts').value))
 
         pub_qos = qos_profile_sensor_data
         pub_qos.depth = 1
@@ -104,17 +105,47 @@ class HapticsNode(Node):
         # Solo se llega aquí si ROS se está cerrando durante la espera
         raise ExternalShutdownException()
 
+    def _map_efforts_to_joints(self, values):
+        """Adapta el array del robot al tamaño del haptics_controller.
+
+        Acepta:
+          - N valores, donde N == len(joint_names)
+          - 9 valores en layout legacy:
+              [thumb, index, middle, ring, thumb_buzz, index_buzz,
+               palm_index_buzz, palm_pinky_buzz, palm_strap]
+            → se toman FFB [0..3] + strap [8] cuando el controlador tiene 5 joints
+        """
+        n = len(self.joint_names)
+        if len(values) == n:
+            return [float(x) for x in values]
+
+        if len(values) == 9 and n == 5:
+            # Legacy 9 → controller 5 (FFB + strap). Buzzers [4..7] se ignoran aquí.
+            return [float(values[i]) for i in (0, 1, 2, 3, 8)]
+
+        if len(values) == 9 and n == 9:
+            return [float(x) for x in values]
+
+        self.get_logger().warn(
+            f"Expected {n} or 9 effort values (legacy), got {len(values)}")
+        return None
+
     def _callback(self, msg: Float64MultiArray):
-        if len(msg.data) != len(self.joint_names):
-            self.get_logger().warn(
-                f"Expected {len(self.joint_names)} effort values, got {len(msg.data)}")
+        mapped = self._map_efforts_to_joints(list(msg.data))
+        if mapped is None:
             return
-        self.current_efforts = list(msg.data)
+        self.current_efforts = mapped
 
     def _on_timer(self):
         self._apply_efforts(self.current_efforts)
 
     def _apply_efforts(self, efforts):
+        if len(efforts) != len(self.joint_names):
+            self.get_logger().warn(
+                f"Skipping publish: efforts size {len(efforts)} != "
+                f"joints size {len(self.joint_names)}")
+            return
+
         traj = JointTrajectory()
         traj.header = Header()
         traj.header.stamp = self.get_clock().now().to_msg()
