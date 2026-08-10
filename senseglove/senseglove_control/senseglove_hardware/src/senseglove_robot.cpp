@@ -179,15 +179,27 @@ bool SenseGloveRobot::getImuRotation(SGCore::Kinematics::Quat& outIMU) const
 
 void SenseGloveRobot::queueEffort(const std::vector<double>& effortCommand)
 {
+  // Commands arrive in the ROS 0-100 scale; normalize to [0.0, 1.0] for the SDK
   const size_t copySize = std::min(effortCommand.size(), effortLevels_.size());
+  float totalEffort = 0.0f;
   for (size_t i = 0; i < copySize; ++i)
-    effortLevels_[i] = static_cast<float>(effortCommand[i]);
+  {
+    const float raw = static_cast<float>(effortCommand[i]);
+    totalEffort += std::abs(raw);
+    effortLevels_[i] = std::clamp(raw, 0.0f, COMMAND_SCALE) / COMMAND_SCALE;
+  }
   for (size_t i = copySize; i < effortLevels_.size(); ++i)
     effortLevels_[i] = 0.0f;
 
-  float totalEffort = 0.0f;
-  for (size_t i = 0; i < copySize; ++i)
-    totalEffort += std::abs(effortLevels_[i]);
+  static rclcpp::Clock steady_clock(RCL_STEADY_TIME);
+  RCLCPP_DEBUG_THROTTLE(rclcpp::get_logger("senseglove.robot"), steady_clock, 500,
+                        "totalEffort=%.4f (thr=%.1f) | levels01=[%.3f, %.3f, %.3f, %.3f, %.3f]",
+                        totalEffort, MIN_TOTAL_FFB_THRESHOLD,
+                        effortLevels_.size() > 0 ? effortLevels_[0] : -1,
+                        effortLevels_.size() > 1 ? effortLevels_[1] : -1,
+                        effortLevels_.size() > 2 ? effortLevels_[2] : -1,
+                        effortLevels_.size() > 3 ? effortLevels_[3] : -1,
+                        effortLevels_.size() > 4 ? effortLevels_[4] : -1);
 
   effortQueued_ = false;
   if (totalEffort > MIN_TOTAL_FFB_THRESHOLD)
@@ -204,8 +216,9 @@ void SenseGloveRobot::queueEffort(const std::vector<double>& effortCommand)
         ffbQueued = novaglovePtr_->QueueForceFeedbackLevels(effortLevels_);
         break;
       case GloveType::Nova2:
-        squeezeLevel_ = std::min((effortLevels_.back() * STRAP_SAFETY_THRESHOLD) / 100.0f,
-                                 STRAP_SAFETY_THRESHOLD);
+        // Strap squeeze proportional to the command, capped at STRAP_SAFETY_THRESHOLD %
+        squeezeLevel_ = std::min(effortLevels_.back() * (STRAP_SAFETY_THRESHOLD / 100.0f),
+                                 STRAP_SAFETY_THRESHOLD / 100.0f);
         ffbQueued = nova2glovePtr_->QueueForceFeedbackLevels(effortLevels_);
         squeezeQueued = nova2glovePtr_->QueueSqueezeLevel(squeezeLevel_);
         break;
@@ -218,15 +231,17 @@ void SenseGloveRobot::queueEffort(const std::vector<double>& effortCommand)
 
 void SenseGloveRobot::queueVibrations(const std::vector<double>& vibrationCommand)
 {
+  // Commands arrive in the ROS 0-100 scale; normalize to [0.0, 1.0] for the SDK
   const size_t copySize = std::min(vibrationCommand.size(), vibrationLevels_.size());
-  for (size_t i = 0; i < copySize; ++i)
-    vibrationLevels_[i] = static_cast<float>(vibrationCommand[i]);
-  for (size_t i = copySize; i < vibrationLevels_.size(); ++i)
-    vibrationLevels_[i] = 0.0f;
-
   float totalVibration = 0.0f;
   for (size_t i = 0; i < copySize; ++i)
-    totalVibration += std::abs(vibrationLevels_[i]);
+  {
+    const float raw = static_cast<float>(vibrationCommand[i]);
+    totalVibration += std::abs(raw);
+    vibrationLevels_[i] = std::clamp(raw, 0.0f, COMMAND_SCALE) / COMMAND_SCALE;
+  }
+  for (size_t i = copySize; i < vibrationLevels_.size(); ++i)
+    vibrationLevels_[i] = 0.0f;
 
   vibrationQueued_ = false;
   if (totalVibration > MIN_TOTAL_VIBRATION_THRESHOLD)

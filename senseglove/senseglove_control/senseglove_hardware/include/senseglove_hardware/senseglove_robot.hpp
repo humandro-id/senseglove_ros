@@ -57,8 +57,15 @@ public:
   static constexpr int JOINTS_PER_FINGER = 4;
   static constexpr int DISTAL_JOINT_INDEX = 3;
 
+  // ROS effort/vibration commands use a 0-100 scale; the SDK expects levels in [0.0, 1.0].
+  // Commands get normalized by COMMAND_SCALE before being queued on the glove.
+  static constexpr float COMMAND_SCALE = 100.0f;
+
+  // Thresholds expressed in the ROS command scale (0-100)
   static constexpr float MIN_TOTAL_FFB_THRESHOLD = 10.0f;
   static constexpr float MIN_TOTAL_VIBRATION_THRESHOLD = 10.0f;
+
+  // Max squeeze level (in %) allowed on the Nova 2 palm strap, for safety
   static constexpr float STRAP_SAFETY_THRESHOLD = 10.0f;
 
   // Construct a SenseGlove robot
