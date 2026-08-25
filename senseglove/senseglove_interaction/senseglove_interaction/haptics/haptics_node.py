@@ -39,7 +39,11 @@ class HapticsNode(Node):
         self.current_efforts = self._map_efforts_to_joints(
             list(self.get_parameter('default_efforts').value))
 
-        pub_qos = qos_profile_sensor_data
+        pub_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+        )
         pub_qos.depth = 1
 
         sub_qos = QoSProfile(
