@@ -3,6 +3,7 @@
 
 #include <realtime_tools/realtime_buffer.hpp>
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -237,9 +238,11 @@ private:
   bool effortActive_ = false;
   bool vibrationActive_ = false;
 
-  // Nova 2 waveform RT buffer
-  realtime_tools::RealtimeBuffer<WaveformCmd> waveform_buffer_;
-  std::atomic<bool> waveform_pending_{false};
+  // Nova 2 waveform RT buffers, one slot per LRA motor so commands for
+  // different motors arriving within the same write() cycle are not dropped
+  static constexpr size_t NUM_NOVA2_VIBRO_MOTORS = 4;
+  std::array<realtime_tools::RealtimeBuffer<WaveformCmd>, NUM_NOVA2_VIBRO_MOTORS> waveform_buffers_;
+  std::array<std::atomic<bool>, NUM_NOVA2_VIBRO_MOTORS> waveform_pending_{};
 
   void computeJointCounts();
   void updateJointPositions(const std::vector<std::vector<SGCore::Kinematics::Vect3D>>& poseAngles);

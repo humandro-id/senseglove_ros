@@ -295,8 +295,18 @@ void SenseGloveRobot::queueCustomWaveform(SGCore::CustomWaveform& waveform,
     return;
   }
 
-  waveform_buffer_.writeFromNonRT(WaveformCmd{waveform, motor});
-  waveform_pending_.store(true, std::memory_order_release);
+  // ENova2VibroMotor: Unknown = 0, then the four motors as 1..4
+  const auto motorIdx = static_cast<size_t>(motor);
+  if (motorIdx == 0 || motorIdx > NUM_NOVA2_VIBRO_MOTORS)
+  {
+    RCLCPP_WARN(rclcpp::get_logger("senseglove.robot"),
+                "queueCustomWaveform: invalid Nova 2 motor %zu, ignored", motorIdx);
+    return;
+  }
+
+  const size_t slot = motorIdx - 1;
+  waveform_buffers_[slot].writeFromNonRT(WaveformCmd{waveform, motor});
+  waveform_pending_[slot].store(true, std::memory_order_release);
 }
 
 void SenseGloveRobot::processCustomWaveform()
@@ -304,12 +314,14 @@ void SenseGloveRobot::processCustomWaveform()
   if (gloveType_ != GloveType::Nova2 || !nova2glovePtr_)
     return;
 
-  if (!waveform_pending_.load(std::memory_order_acquire))
-    return;
+  for (size_t slot = 0; slot < NUM_NOVA2_VIBRO_MOTORS; ++slot)
+  {
+    if (!waveform_pending_[slot].exchange(false, std::memory_order_acq_rel))
+      continue;
 
-  WaveformCmd* cmd = waveform_buffer_.readFromRT();
-  nova2glovePtr_->SendCustomWaveform_Nova2(cmd->waveform, cmd->motor);
-  waveform_pending_.store(false, std::memory_order_release);
+    WaveformCmd* cmd = waveform_buffers_[slot].readFromRT();
+    nova2glovePtr_->SendCustomWaveform_Nova2(cmd->waveform, cmd->motor);
+  }
 }
 
 void SenseGloveRobot::stopHaptics()

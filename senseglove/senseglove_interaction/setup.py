@@ -36,6 +36,7 @@ setup(
             # haptics nodes
             'haptics_node = senseglove_interaction.haptics.haptics_node:main',
             'nova2_vibration_node = senseglove_interaction.haptics.nova2_vibration_node:main',
+            'vibration_levels_node = senseglove_interaction.haptics.vibration_levels_node:main',
             # imu tf broadcaster
             'imu_tf_broadcaster = senseglove_interaction.common.imu_tf_broadcaster:main',
         ],

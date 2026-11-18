@@ -96,6 +96,16 @@ def generate_launch_description():
                     output='screen',
                 )
             )
+            if glove.get('type', 'nova2') == 'nova2':
+                nodes.append(
+                    Node(
+                        package='senseglove_interaction',
+                        executable='vibration_levels_node',
+                        name=f'vibration_levels_node_{handedness}',
+                        namespace=ns,
+                        output='screen',
+                    )
+                )
 
         return nodes
 
